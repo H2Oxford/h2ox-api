@@ -67,13 +67,6 @@ def index():
             "historic": dfs_historic[reservoir]
             .loc[
                 (dfs_historic[reservoir].index > (date - timedelta(days=90)))
-                & (dfs_historic[reservoir].index <= (date)),
-                ["x", "y"],
-            ]
-            .to_dict(orient="records"),
-            "future": dfs_historic[reservoir]
-            .loc[
-                (dfs_historic[reservoir].index > (date))
                 & (dfs_historic[reservoir].index <= (date + timedelta(days=90))),
                 ["x", "y"],
             ]
