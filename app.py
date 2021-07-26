@@ -5,6 +5,7 @@ from datetime import timedelta
 from flask import Flask, request, jsonify
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_cors import CORS
 
 import pandas as pd
 
@@ -18,6 +19,9 @@ for kk in dfs_forecast.keys():
 
 app = Flask(__name__)
 auth = HTTPBasicAuth()
+
+CORS(app)
+cors = CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 users = {
     os.environ['USERNAME']: generate_password_hash(os.environ['USERPASSWORD'])
