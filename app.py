@@ -17,7 +17,6 @@ for kk in dfs_forecast.keys():
     dfs_historic[kk].index = pd.to_datetime(dfs_historic[kk].index)
     dfs_historic[kk]['x'] = dfs_historic[kk].index.astype(str)
     dfs_historic[kk].rename(columns={'PRESENT_STORAGE_TMC':'y'}, inplace=True)
-    # dfs_forecast[kk]['date'] = dfs_forecast[kk].index.astype(str)
 
 app = Flask(__name__)
 auth = HTTPBasicAuth()
