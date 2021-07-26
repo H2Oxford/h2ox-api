@@ -4,13 +4,11 @@ from pathlib import Path
 
 import pandas as pd
 
-text = ""
+res = {}
 for f in Path("data").glob("*_historic.csv"):
-    print(f.stem)
+    name = f.stem.split("_")[0]
     df = pd.read_csv(f).dropna()
     df.columns = ["x", "y"]
-    text += "const " + f.stem + " = "
-    text += df.to_json(orient="records")
-    text += "\n"
+    res[name] = df.to_dict(orient="records")
 
-print(text)
+print(f"const historic = {res}")
