@@ -33,7 +33,6 @@ app = Flask(__name__)
 auth = HTTPBasicAuth()
 
 CORS(app)
-cors = CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 users = {os.environ["USERNAME"]: generate_password_hash(os.environ["USERPASSWORD"])}
 
