@@ -66,12 +66,12 @@ def index():
         data = {
             "historic": dfs_historic[reservoir]
             .loc[
-                (dfs_historic[reservoir].index > (date - timedelta(days=90)))
+                (dfs_historic[reservoir].index > (date - timedelta(days=180)))
                 & (dfs_historic[reservoir].index <= (date + timedelta(days=90))),
                 ["x", "y"],
             ]
             .to_dict(orient="records"),
-            "predicted": projections,
+            "forecast": projections,
         }
         return jsonify(data)
 
