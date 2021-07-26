@@ -43,14 +43,15 @@ def index():
 
     try:
         data = {
-            'historic':dfs_historic[reservoir].loc[(dfs_historic[reservoir].index>=(date-timedelta(days=90))) & (dfs_historic[reservoir].index<=(date)),'PRESENT_STORAGE_TMC'].to_json(),
+            'historic':dfs_historic[reservoir].loc[(dfs_historic[reservoir].index>(date-timedelta(days=90))) & (dfs_historic[reservoir].index<=(date)),'PRESENT_STORAGE_TMC'].to_json(),
+            'future':dfs_historic[reservoir].loc[(dfs_historic[reservoir].index>(date)) & (dfs_historic[reservoir].index<=(date+timedelta(days=90))),'PRESENT_STORAGE_TMC'].to_json(),
             'predicted':dfs_forecast[reservoir].loc[date,:].to_json()
         }
         return jsonify(data)
         
     except Exception as e:
         print ('Error!',e)
-        return jsonify({'Error':'bad request.'})
+        return jsonify({'Error':f'bad request: {e}'})
 
     
 
