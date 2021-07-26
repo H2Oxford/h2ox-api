@@ -15,6 +15,9 @@ dfs_historic = {os.path.splitext(os.path.split(f)[1])[0].split('_')[0]:pd.read_c
 for kk in dfs_forecast.keys():
     dfs_forecast[kk].index = pd.to_datetime(dfs_forecast[kk].index)
     dfs_historic[kk].index = pd.to_datetime(dfs_historic[kk].index)
+    dfs_historic[kk]['x'] = dfs_historic[kk].index.astype(str)
+    dfs_historic[kk].rename(columns={'PRESENT_STORAGE_TMC':'y'}, inplace=True)
+    # dfs_forecast[kk]['date'] = dfs_forecast[kk].index.astype(str)
 
 app = Flask(__name__)
 auth = HTTPBasicAuth()
@@ -42,10 +45,19 @@ def index():
         return jsonify({'error':f'specify a date as YYYY-MM-DD'})
 
     try:
+
+        projections = [
+            {
+                'x':str(date+timedelta(days=int(kk.split(' ')[0])))[0:10],
+                'y':vv
+            } 
+            for kk,vv in dfs_forecast[reservoir].loc[date,:].to_dict().items()
+        ]
+
         data = {
-            'historic':dfs_historic[reservoir].loc[(dfs_historic[reservoir].index>(date-timedelta(days=90))) & (dfs_historic[reservoir].index<=(date)),'PRESENT_STORAGE_TMC'].to_json(),
-            'future':dfs_historic[reservoir].loc[(dfs_historic[reservoir].index>(date)) & (dfs_historic[reservoir].index<=(date+timedelta(days=90))),'PRESENT_STORAGE_TMC'].to_json(),
-            'predicted':dfs_forecast[reservoir].loc[date,:].to_json()
+            'historic':dfs_historic[reservoir].loc[(dfs_historic[reservoir].index>(date-timedelta(days=90))) & (dfs_historic[reservoir].index<=(date)),['x','y']].to_dict(orient='records'),
+            'future':dfs_historic[reservoir].loc[(dfs_historic[reservoir].index>(date)) & (dfs_historic[reservoir].index<=(date+timedelta(days=90))),['x','y']].to_dict(orient='records'),
+            'predicted':projections
         }
         return jsonify(data)
         
