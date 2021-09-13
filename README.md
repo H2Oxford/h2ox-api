@@ -8,13 +8,18 @@ A username and password are required. Please contact us for access!
 **Useage (e.g. using Python's requests library):**
 
     import requests, json
-    
+
     url = "https://h2ox-api.herokuapp.com/api/"
-    
+
     r = requests.get(
         url = url,
         params = {"reservoir":"kabini", "date":"2014-03-03"},
         auth = ("<username>","<password>")
     )
-    
+
     data = json.loads(r.text)
+
+## Running the flask app
+```
+USERNAME=... USERPASSWORD=... FLASK_DEBUG=1 FLASK_APP=app.py flask run
+```
