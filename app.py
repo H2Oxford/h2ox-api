@@ -47,6 +47,7 @@ def verify_password(username, password):
 @auth.login_required
 def index():
     reservoir = request.args.get("reservoir")
+    history = int(request.args.get("history")) or 180
     if reservoir is None or reservoir not in dfs_historic.keys():
         return jsonify({"error": f"specify a reservoir from {dfs_historic.keys()}"})
     date = request.args.get("date")
@@ -65,7 +66,7 @@ def index():
         data = {
             "historic": dfs_historic[reservoir]
             .loc[
-                (dfs_historic[reservoir].index > (date - timedelta(days=180)))
+                (dfs_historic[reservoir].index > (date - timedelta(days=history)))
                 & (dfs_historic[reservoir].index <= (date + timedelta(days=90))),
                 ["x", "y"],
             ]
