@@ -1,4 +1,5 @@
-import os, glob
+import os
+import glob
 from datetime import datetime as dt
 from datetime import timedelta
 
@@ -53,13 +54,26 @@ def index():
     date = request.args.get("date")
     try:
         date = dt.strptime(date, "%Y-%m-%d")
-    except:
-        return jsonify({"error": f"specify a date as YYYY-MM-DD"})
+    except Exception as e:
+        return jsonify({"error": f"specify a date as YYYY-MM-DD: {e}"})
 
     try:
-
-        projections = [
+        forecast = [
             {"x": str(date + timedelta(days=int(kk.split(" ")[0])))[0:10], "y": vv}
+            for kk, vv in dfs_forecast[reservoir].loc[date, :].to_dict().items()
+        ]
+        forecast_up = [
+            {
+                "x": str(date + timedelta(days=int(kk.split(" ")[0])))[0:10],
+                "y": vv * 1.2,
+            }
+            for kk, vv in dfs_forecast[reservoir].loc[date, :].to_dict().items()
+        ]
+        forecast_down = [
+            {
+                "x": str(date + timedelta(days=int(kk.split(" ")[0])))[0:10],
+                "y": vv * 0.8,
+            }
             for kk, vv in dfs_forecast[reservoir].loc[date, :].to_dict().items()
         ]
 
@@ -67,11 +81,13 @@ def index():
             "historic": dfs_historic[reservoir]
             .loc[
                 (dfs_historic[reservoir].index > (date - timedelta(days=history)))
-                & (dfs_historic[reservoir].index <= (date + timedelta(days=90))),
+                & (dfs_historic[reservoir].index <= (date + timedelta(days=1))),
                 ["x", "y"],
             ]
             .to_dict(orient="records"),
-            "forecast": projections,
+            "forecast": forecast,
+            "forecastUp": forecast_up,
+            "forecastDown": forecast_down,
         }
         return jsonify(data)
 
