@@ -79,6 +79,7 @@ def index():
 
         data = {
             "historic": dfs_historic[reservoir]
+            .fillna(0)
             .loc[
                 (dfs_historic[reservoir].index > (date - timedelta(days=history)))
                 & (dfs_historic[reservoir].index <= (date + timedelta(days=1))),
