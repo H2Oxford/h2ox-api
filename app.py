@@ -1,34 +1,37 @@
 import os
-import glob
 from datetime import datetime as dt
 from datetime import timedelta
+from pathlib import Path
 
+import pandas as pd
 from flask import Flask, request, jsonify
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_cors import CORS
 
-import pandas as pd
 
-fs = glob.glob(os.path.join(os.getcwd(), "data", "*_forecast.csv"))
-dfs_forecast = {
-    os.path.splitext(os.path.split(f)[1])[0]
-    .split("_")[0]: pd.read_csv(f)
-    .set_index("index")
-    for f in fs
-}
-fs = glob.glob(os.path.join(os.getcwd(), "data", "*_historic.csv"))
-dfs_historic = {
-    os.path.splitext(os.path.split(f)[1])[0]
-    .split("_")[0]: pd.read_csv(f)
-    .set_index("Unnamed: 0")
-    for f in fs
-}
-for kk in dfs_forecast.keys():
-    dfs_forecast[kk].index = pd.to_datetime(dfs_forecast[kk].index)
-    dfs_historic[kk].index = pd.to_datetime(dfs_historic[kk].index)
-    dfs_historic[kk]["x"] = dfs_historic[kk].index.astype(str)
-    dfs_historic[kk].rename(columns={"PRESENT_STORAGE_TMC": "y"}, inplace=True)
+def load_csvs(glob):
+    return {
+        f.stem.split("_")[0]: pd.read_csv(f, index_col=0, parse_dates=True)
+        for f in Path("data").glob(glob)
+    }
+
+
+dfs_forecast = load_csvs("*_forecast.csv")
+dfs_historic = load_csvs("*_historic.csv")
+dfs_prec = load_csvs("*_prec.csv")
+
+for reservoir in dfs_historic.keys():
+    dfs_historic[reservoir] = (
+        dfs_historic[reservoir]
+        .assign(x=lambda df: df.index.astype(str))
+        .rename(columns={"PRESENT_STORAGE_TMC": "y"})
+    )
+    dfs_prec[reservoir] = (
+        dfs_prec[reservoir]
+        .assign(x=lambda df: df.index.astype(str))
+        .rename(columns={"tp": "y"})
+    )
 
 app = Flask(__name__)
 auth = HTTPBasicAuth()
@@ -76,16 +79,30 @@ def index():
             }
             for kk, vv in dfs_forecast[reservoir].loc[date, :].to_dict().items()
         ]
-
-        data = {
-            "historic": dfs_historic[reservoir]
+        historic = (
+            dfs_historic[reservoir]
             .fillna(0)
             .loc[
                 (dfs_historic[reservoir].index > (date - timedelta(days=history)))
                 & (dfs_historic[reservoir].index <= (date + timedelta(days=1))),
                 ["x", "y"],
             ]
-            .to_dict(orient="records"),
+            .to_dict(orient="records")
+        )
+        prec = (
+            dfs_prec[reservoir]
+            .fillna(0)
+            .loc[
+                (dfs_prec[reservoir].index > (date - timedelta(days=history)))
+                & (dfs_prec[reservoir].index <= (date + timedelta(days=1))),
+                ["x", "y"],
+            ]
+            .to_dict(orient="records")
+        )
+
+        data = {
+            "prec": prec,
+            "historic": historic,
             "forecast": forecast,
             "forecastUp": forecast_up,
             "forecastDown": forecast_down,
