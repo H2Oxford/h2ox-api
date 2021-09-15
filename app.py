@@ -17,27 +17,44 @@ def load_csvs(glob):
     }
 
 
+def prep_historic(dfs, y_col):
+    return {
+        k: df.assign(x=lambda df: df.index.astype(str)).rename(columns={y_col: "y"})
+        for k, df in dfs.items()
+    }
+
+
+def forecast2dict(dfs, reservoir, date, mult=1.0):
+    return [
+        {"x": str(date + timedelta(days=int(kk.split(" ")[0])))[0:10], "y": vv * mult}
+        for kk, vv in dfs[reservoir].loc[date, :].to_dict().items()
+    ]
+
+
+def historic2dict(dfs, reservoir, date, history):
+    return (
+        dfs[reservoir]
+        .fillna(0)
+        .loc[
+            (dfs[reservoir].index > (date - timedelta(days=history)))
+            & (dfs[reservoir].index <= (date + timedelta(days=1))),
+            ["x", "y"],
+        ]
+        .to_dict(orient="records")
+    )
+
+
 dfs_forecast = load_csvs("*_forecast.csv")
+dfs_forecast_up = load_csvs("*_forecast_up.csv")
+dfs_forecast_down = load_csvs("*_forecast_down.csv")
 dfs_historic = load_csvs("*_historic.csv")
 dfs_prec = load_csvs("*_prec.csv")
-
-for reservoir in dfs_historic.keys():
-    dfs_historic[reservoir] = (
-        dfs_historic[reservoir]
-        .assign(x=lambda df: df.index.astype(str))
-        .rename(columns={"PRESENT_STORAGE_TMC": "y"})
-    )
-    dfs_prec[reservoir] = (
-        dfs_prec[reservoir]
-        .assign(x=lambda df: df.index.astype(str))
-        .rename(columns={"tp": "y"})
-    )
+dfs_historic = prep_historic(dfs_historic, y_col="PRESENT_STORAGE_TMC")
+dfs_prec = prep_historic(dfs_prec, y_col="tp")
 
 app = Flask(__name__)
 auth = HTTPBasicAuth()
-
 CORS(app)
-
 users = {os.environ["USERNAME"]: generate_password_hash(os.environ["USERPASSWORD"])}
 
 
@@ -52,63 +69,25 @@ def verify_password(username, password):
 def index():
     reservoir = request.args.get("reservoir")
     history = int(request.args.get("history")) or 180
+    date = request.args.get("date")
+
     if reservoir is None or reservoir not in dfs_historic.keys():
         return jsonify({"error": f"specify a reservoir from {dfs_historic.keys()}"})
-    date = request.args.get("date")
     try:
         date = dt.strptime(date, "%Y-%m-%d")
     except Exception as e:
         return jsonify({"error": f"specify a date as YYYY-MM-DD: {e}"})
 
     try:
-        forecast = [
-            {"x": str(date + timedelta(days=int(kk.split(" ")[0])))[0:10], "y": vv}
-            for kk, vv in dfs_forecast[reservoir].loc[date, :].to_dict().items()
-        ]
-        forecast_up = [
+        return jsonify(
             {
-                "x": str(date + timedelta(days=int(kk.split(" ")[0])))[0:10],
-                "y": vv * 1.2,
+                "forecast": forecast2dict(dfs_forecast, reservoir, date),
+                "forecastUp": forecast2dict(dfs_forecast_up, reservoir, date, 1.2),
+                "forecastDown": forecast2dict(dfs_forecast_down, reservoir, date, 0.8),
+                "historic": historic2dict(dfs_historic, reservoir, date, history),
+                "prec": historic2dict(dfs_prec, reservoir, date, history),
             }
-            for kk, vv in dfs_forecast[reservoir].loc[date, :].to_dict().items()
-        ]
-        forecast_down = [
-            {
-                "x": str(date + timedelta(days=int(kk.split(" ")[0])))[0:10],
-                "y": vv * 0.8,
-            }
-            for kk, vv in dfs_forecast[reservoir].loc[date, :].to_dict().items()
-        ]
-        historic = (
-            dfs_historic[reservoir]
-            .fillna(0)
-            .loc[
-                (dfs_historic[reservoir].index > (date - timedelta(days=history)))
-                & (dfs_historic[reservoir].index <= (date + timedelta(days=1))),
-                ["x", "y"],
-            ]
-            .to_dict(orient="records")
         )
-        prec = (
-            dfs_prec[reservoir]
-            .fillna(0)
-            .loc[
-                (dfs_prec[reservoir].index > (date - timedelta(days=history)))
-                & (dfs_prec[reservoir].index <= (date + timedelta(days=1))),
-                ["x", "y"],
-            ]
-            .to_dict(orient="records")
-        )
-
-        data = {
-            "prec": prec,
-            "historic": historic,
-            "forecast": forecast,
-            "forecastUp": forecast_up,
-            "forecastDown": forecast_down,
-        }
-        return jsonify(data)
-
     except Exception as e:
         print("Error!", e)
         return jsonify({"Error": f"bad request: {e}"})
