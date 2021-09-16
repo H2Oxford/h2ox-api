@@ -10,9 +10,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_cors import CORS
 
 
-def load_csvs(glob):
+def load_parquets(glob):
     return {
-        f.stem.split("_")[0]: pd.read_csv(f, index_col=0, parse_dates=True)
+        f.stem.split("_")[0]: pd.read_parquet(f)
         for f in Path("data").glob(glob)
     }
 
@@ -24,10 +24,10 @@ def prep_historic(dfs, y_col):
     }
 
 
-def forecast2dict(dfs, reservoir, date, mult=1.0):
+def forecast2dict(dfs, reservoir, date):
     return [
-        {"x": str(date + timedelta(days=int(kk.split(" ")[0])))[0:10], "y": vv * mult}
-        for kk, vv in dfs[reservoir].loc[date, :].to_dict().items()
+        {"x": str(date + timedelta(days=int(kk.split(" ")[0])))[0:10], "y": vv}
+        for ii, (kk, vv) in enumerate(dfs[reservoir].loc[date, :].to_dict().items())
     ]
 
 
@@ -44,13 +44,13 @@ def historic2dict(dfs, reservoir, date, history):
     )
 
 
-dfs_forecast = load_csvs("*_forecast.csv")
-dfs_forecast_up = load_csvs("*_forecast_up.csv")
-dfs_forecast_down = load_csvs("*_forecast_down.csv")
-dfs_historic = load_csvs("*_historic.csv")
-dfs_prec = load_csvs("*_prec.csv")
-dfs_historic = prep_historic(dfs_historic, y_col="PRESENT_STORAGE_TMC")
-dfs_prec = prep_historic(dfs_prec, y_col="tp")
+dfs_forecast = load_parquets("*_forecast.pq")
+dfs_forecast_up = load_parquets("*_forecast_up.pq")
+dfs_forecast_down = load_parquets("*_forecast_down.pq")
+dfs_historic = load_parquets("*_historic.pq")
+
+dfs_historic = prep_historic(dfs_historic, y_col="volume_bcm")
+dfs_prec = prep_historic(dfs_historic, y_col="tp_0")
 
 app = Flask(__name__)
 auth = HTTPBasicAuth()
@@ -82,8 +82,8 @@ def index():
         return jsonify(
             {
                 "forecast": forecast2dict(dfs_forecast, reservoir, date),
-                "forecastUp": forecast2dict(dfs_forecast_up, reservoir, date, 1.2),
-                "forecastDown": forecast2dict(dfs_forecast_down, reservoir, date, 0.8),
+                "forecastUp": forecast2dict(dfs_forecast_up, reservoir, date),
+                "forecastDown": forecast2dict(dfs_forecast_down, reservoir, date),
                 "historic": historic2dict(dfs_historic, reservoir, date, history),
                 "prec": historic2dict(dfs_prec, reservoir, date, history),
             }
