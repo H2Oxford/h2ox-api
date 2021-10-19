@@ -1,6 +1,5 @@
 # Custom
 data_raw/
-csv_to_parquet.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
