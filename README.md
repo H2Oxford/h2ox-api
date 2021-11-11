@@ -21,5 +21,5 @@ A username and password are required. Please contact us for access!
 
 ## Running the flask app
 ```
-USERNAME=... USERPASSWORD=... FLASK_DEBUG=1 FLASK_APP=app.py flask run
+USERNAME=... USERPASSWORD=... FLASK_DEBUG=1 FLASK_APP=app.py flask run --port=5111
 ```
