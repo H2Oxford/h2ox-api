@@ -4,3 +4,4 @@ flask-cors
 gunicorn>=19.9.0
 Flask-HTTPAuth>=4.1.0
 fastparquet
+google-cloud-bigquery

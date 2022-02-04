@@ -20,6 +20,10 @@ A username and password are required. Please contact us for access!
     data = json.loads(r.text)
 
 ## Running the flask app
+First load Google Cloud credentials from a Service Account JSON:
+```
+export GOOGLE_CREDENTIALS=$(cat credentials.json)
+```
 ```
 USERNAME=... USERPASSWORD=... FLASK_DEBUG=1 FLASK_APP=app.py flask run --port=5111
 ```
