@@ -45,8 +45,6 @@ def historic2dict(dfs, reservoir, date, history):
 
 
 dfs_forecast = load_parquets("*_forecast.pq")
-dfs_forecast_up = load_parquets("*_forecast_up.pq")
-dfs_forecast_down = load_parquets("*_forecast_down.pq")
 dfs_historic = load_parquets("*_historic.pq")
 
 dfs_historic = prep_historic(dfs_historic, y_col="volume_bcm")
@@ -82,8 +80,6 @@ def index():
         return jsonify(
             {
                 "forecast": forecast2dict(dfs_forecast, reservoir, date),
-                "forecastUp": forecast2dict(dfs_forecast_up, reservoir, date),
-                "forecastDown": forecast2dict(dfs_forecast_down, reservoir, date),
                 "historic": historic2dict(dfs_historic, reservoir, date, history),
                 "prec": historic2dict(dfs_prec, reservoir, date, history),
             }
