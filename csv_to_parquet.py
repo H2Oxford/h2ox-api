@@ -2,7 +2,6 @@
 
 from pathlib import Path
 import pandas as pd
-from random import uniform
 
 
 def load_csvs(glob, prep):
@@ -12,16 +11,11 @@ def load_csvs(glob, prep):
     }
 
 
-def prep_forecast(df):
-    return df * 1000
-
-
 def prep_historic(df):
     return df.get(["volume_bcm", "tp_0"]).assign(volume_bcm=df.volume_bcm * 1000)
 
 
 data = {
-    "forecast": load_csvs("*_forecast.csv", prep_forecast),
     "historic": load_csvs("*_historic.csv", prep_historic),
 }
 
