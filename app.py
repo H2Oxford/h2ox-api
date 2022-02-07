@@ -1,11 +1,9 @@
 import os
 import json
 import datetime as dt
-from pathlib import Path
 
 from google.cloud import bigquery
 from google.oauth2 import service_account
-import pandas as pd
 from flask import Flask, request, jsonify
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -18,21 +16,10 @@ bqclient = bigquery.Client(
 )
 
 
-def load_parquets(glob):
-    return {f.stem.split("_")[0]: pd.read_parquet(f) for f in Path("data").glob(glob)}
-
-
-def prep_historic(dfs, y_col):
-    return {
-        k: df.assign(x=lambda df: df.index.astype(str)).rename(columns={y_col: "y"})
-        for k, df in dfs.items()
-    }
-
-
 def get_forecast(reservoir, ref_date):
     reservoir = reservoir.split(" ")[0]  # naive prevent any injection!
     query = f"""
-    SELECT forecast FROM `oxeo-main.wave2web.h2ox-forecast`
+    SELECT forecast FROM `oxeo-main.wave2web.prediction`
     WHERE `reservoir` = "{reservoir}"
     AND `date` = "{ref_date.date().isoformat()}"
     ORDER BY `timestamp` DESC
@@ -41,27 +28,36 @@ def get_forecast(reservoir, ref_date):
     job = bqclient.query(query)
     data = [row.values() for row in job][0][0]
     data = [
-        {"x": ref_date + dt.timedelta(days=i), "y": val} for i, val in enumerate(data)
+        {
+            "x": ref_date + dt.timedelta(days=i),
+            "y": val,
+        }
+        for i, val in enumerate(data)
     ]
     return data
 
 
-def historic2dict(dfs, reservoir, date, history):
-    return (
-        dfs[reservoir]
-        .fillna(0)
-        .loc[
-            (dfs[reservoir].index > (date - dt.timedelta(days=history)))
-            & (dfs[reservoir].index <= (date + dt.timedelta(days=1))),
-            ["x", "y"],
-        ]
-        .to_dict(orient="records")
-    )
+def get_historic(reservoir, date, history):
+    start_date = date - dt.timedelta(days=history)
+    query = f"""
+    SELECT date, volume, precip FROM `oxeo-main.wave2web.historic`
+    WHERE `reservoir` = "{reservoir}"
+    AND `date` >= "{start_date.date().isoformat()}"
+    AND `date` < "{date.date().isoformat()}"
+    ORDER BY `date`
+    """
+    job = bqclient.query(query)
+    data = (row.values() for row in job)
+    data = [
+        {
+            "x": row[0].isoformat(),
+            "volume": row[1],
+            "precip": row[2],
+        }
+        for row in data
+    ]
+    return data
 
-
-dfs_historic = load_parquets("*_historic.pq")
-dfs_historic = prep_historic(dfs_historic, y_col="volume_bcm")
-dfs_prec = prep_historic(dfs_historic, y_col="tp_0")
 
 app = Flask(__name__)
 auth = HTTPBasicAuth()
@@ -82,8 +78,6 @@ def index():
     history = int(request.args.get("history")) or 180
     date = request.args.get("date")
 
-    if reservoir is None or reservoir not in dfs_historic.keys():
-        return jsonify({"error": f"specify a reservoir from {dfs_historic.keys()}"})
     try:
         date = dt.datetime.strptime(date, "%Y-%m-%d")
     except Exception as e:
@@ -93,8 +87,7 @@ def index():
         return jsonify(
             {
                 "forecast": get_forecast(reservoir, date),
-                "historic": historic2dict(dfs_historic, reservoir, date, history),
-                "prec": historic2dict(dfs_prec, reservoir, date, history),
+                "historic": get_historic(reservoir, date, history),
             }
         )
     except Exception as e:
