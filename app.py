@@ -65,6 +65,11 @@ CORS(app)
 users = {os.environ["USERNAME"]: generate_password_hash(os.environ["USERPASSWORD"])}
 
 
+@app.route("/")
+def test_root():
+    return "API is running"
+
+
 @auth.verify_password
 def verify_password(username, password):
     if username in users and check_password_hash(users.get(username), password):
