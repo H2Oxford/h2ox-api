@@ -59,15 +59,46 @@ def get_historic(reservoir, date, history):
     return data
 
 
+def get_levels():
+    query = """
+    SELECT
+        historic.reservoir,
+        historic.volume,
+        prediction.forecast[
+            ORDINAL(ARRAY_LENGTH(prediction.forecast))
+        ] as forecast
+
+    FROM (
+        SELECT t1.reservoir, t1.volume
+        FROM `oxeo-main.wave2web.historic` t1
+        WHERE t1.date = (
+            SELECT MAX(t2.date)
+            FROM `oxeo-main.wave2web.historic` t2
+            WHERE t2.reservoir = t1.reservoir
+        )
+    ) AS historic
+
+    JOIN (
+        SELECT t1.reservoir, t1.forecast
+        FROM `oxeo-main.wave2web.prediction` t1
+        WHERE t1.date = (
+            SELECT MAX(t2.date)
+            FROM `oxeo-main.wave2web.prediction` t2
+            WHERE t2.reservoir = t1.reservoir
+        )
+    ) AS prediction
+
+    ON historic.reservoir = prediction.reservoir
+    """
+    job = bqclient.query(query)
+    data = [dict(row) for row in job]
+    return data
+
+
 app = Flask(__name__)
 auth = HTTPBasicAuth()
 CORS(app)
 users = {os.environ["USERNAME"]: generate_password_hash(os.environ["USERPASSWORD"])}
-
-
-@app.route("/")
-def test_root():
-    return "API is running"
 
 
 @auth.verify_password
@@ -76,9 +107,21 @@ def verify_password(username, password):
         return username
 
 
-@app.route("/api/")
-@auth.login_required
+@app.route("/")
 def index():
+    return "API is running"
+
+
+@app.route("/api/levels")
+@auth.login_required
+def levels():
+    levels = get_levels()
+    return jsonify(levels)
+
+
+@app.route("/api/timeseries")
+@auth.login_required
+def timeseries():
     reservoir = request.args.get("reservoir")
     history = int(request.args.get("history")) or 180
     date = request.args.get("date")
