@@ -1,13 +1,15 @@
 import os
-import json
 import datetime as dt
+import functools
+import json
 
-from google.cloud import bigquery
-from google.oauth2 import service_account
 from flask import Flask, request, jsonify
 from flask_httpauth import HTTPBasicAuth
-from werkzeug.security import generate_password_hash, check_password_hash
 from flask_cors import CORS
+from google.cloud import bigquery
+from google.oauth2 import service_account
+import redis
+from werkzeug.security import generate_password_hash, check_password_hash
 
 bqclient = bigquery.Client(
     credentials=service_account.Credentials.from_service_account_info(
@@ -15,13 +17,37 @@ bqclient = bigquery.Client(
     )
 )
 
+REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+REDIS_PORT = os.environ.get("REDIS_PORT", 6379)
+REDIS_PW = os.environ.get("REDIS_PW", None)
+r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PW)
+redis_expiry = 60 * 60 * 6  # 6 hours
 
-def get_forecast(reservoir, ref_date):
+
+def cache(prefix):
+    def decorator_cache(func):
+        @functools.wraps(func)
+        def wrapper_cache(*args, **kwargs):
+            suffix = kwargs.get("reservoir", "")
+            key = f"{prefix}.{suffix}"
+            if data := r.get(key):
+                return json.loads(data)
+            data = func(*args, **kwargs)
+            r.set(key, json.dumps(data), ex=redis_expiry)
+            return data
+
+        return wrapper_cache
+
+    return decorator_cache
+
+
+@cache("forecast")
+def get_forecast(*, reservoir, date):
     reservoir = reservoir.split(" ")[0]  # naive prevent any injection!
     query = f"""
     SELECT forecast FROM `oxeo-main.wave2web.prediction`
     WHERE `reservoir` = "{reservoir}"
-    AND `date` = "{ref_date.date().isoformat()}"
+    AND `date` = "{date.date().isoformat()}"
     ORDER BY `timestamp` DESC
     LIMIT 1
     """
@@ -29,7 +55,7 @@ def get_forecast(reservoir, ref_date):
     data = [row.values() for row in job][0][0]
     data = [
         {
-            "x": ref_date + dt.timedelta(days=i),
+            "x": (date + dt.timedelta(days=i)).isoformat(),
             "y": val,
         }
         for i, val in enumerate(data)
@@ -37,8 +63,9 @@ def get_forecast(reservoir, ref_date):
     return data
 
 
-def get_historic(reservoir, date, history):
-    start_date = date - dt.timedelta(days=history)
+@cache("historic")
+def get_historic(*, reservoir, date):
+    start_date = date - dt.timedelta(days=365)
     query = f"""
     SELECT date, volume, precip FROM `oxeo-main.wave2web.historic`
     WHERE `reservoir` = "{reservoir}"
@@ -59,6 +86,7 @@ def get_historic(reservoir, date, history):
     return data
 
 
+@cache("levels")
 def get_levels():
     query = """
     SELECT
@@ -123,7 +151,6 @@ def levels():
 @auth.login_required
 def timeseries():
     reservoir = request.args.get("reservoir")
-    history = int(request.args.get("history")) or 180
     date = request.args.get("date")
 
     try:
@@ -132,12 +159,9 @@ def timeseries():
         return jsonify({"error": f"specify a date as YYYY-MM-DD: {e}"})
 
     try:
-        return jsonify(
-            {
-                "forecast": get_forecast(reservoir, date),
-                "historic": get_historic(reservoir, date, history),
-            }
-        )
+        forecast = get_forecast(reservoir=reservoir, date=date)
+        historic = get_historic(reservoir=reservoir, date=date)
+        return jsonify({"forecast": forecast, "historic": historic})
     except Exception as e:
         print("Error!", e)
         return jsonify({"Error": f"bad request: {e}"})
