@@ -41,6 +41,16 @@ def cache(prefix):
     return decorator_cache
 
 
+@cache("reservoirs")
+def get_reservoir_list():
+    query = """
+    SELECT DISTINCT(reservoir) FROM `oxeo-main.wave2web.prediction`
+    """
+    job = bqclient.query(query)
+    data = [row.values()[0] for row in job]
+    return data
+
+
 @cache("forecast")
 def get_forecast(*, reservoir, date):
     reservoir = reservoir.split(" ")[0]  # naive prevent any injection!
@@ -147,6 +157,28 @@ def levels():
     return jsonify(levels)
 
 
+@app.route("/api/forecasts")
+@auth.login_required
+def forecasts():
+    date = request.args.get("date")
+
+    try:
+        date = dt.datetime.strptime(date, "%Y-%m-%d")
+    except Exception as e:
+        return jsonify({"error": f"specify a date as YYYY-MM-DD: {e}"})
+
+    try:
+        reservoirs = get_reservoir_list()
+        data = [
+            {"reservoir": res, "forecast": get_forecast(reservoir=res, date=date)}
+            for res in reservoirs
+        ]
+        return jsonify(data)
+    except Exception as e:
+        print("Error!", e)
+        return jsonify({"Error": f"bad request: {e}"})
+
+
 @app.route("/api/forecast")
 @auth.login_required
 def forecast():
@@ -159,8 +191,7 @@ def forecast():
         return jsonify({"error": f"specify a date as YYYY-MM-DD: {e}"})
 
     try:
-        forecast = get_forecast(reservoir=reservoir, date=date)
-        return jsonify(forecast)
+        return jsonify(get_forecast(reservoir=reservoir, date=date))
     except Exception as e:
         print("Error!", e)
         return jsonify({"Error": f"bad request: {e}"})
@@ -178,8 +209,7 @@ def historic():
         return jsonify({"error": f"specify a date as YYYY-MM-DD: {e}"})
 
     try:
-        historic = get_historic(reservoir=reservoir, date=date)
-        return jsonify(historic)
+        return jsonify(get_historic(reservoir=reservoir, date=date))
     except Exception as e:
         print("Error!", e)
         return jsonify({"Error": f"bad request: {e}"})
