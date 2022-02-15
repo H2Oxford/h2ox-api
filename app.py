@@ -147,9 +147,9 @@ def levels():
     return jsonify(levels)
 
 
-@app.route("/api/timeseries")
+@app.route("/api/forecast")
 @auth.login_required
-def timeseries():
+def forecast():
     reservoir = request.args.get("reservoir")
     date = request.args.get("date")
 
@@ -160,8 +160,26 @@ def timeseries():
 
     try:
         forecast = get_forecast(reservoir=reservoir, date=date)
+        return jsonify(forecast)
+    except Exception as e:
+        print("Error!", e)
+        return jsonify({"Error": f"bad request: {e}"})
+
+
+@app.route("/api/historic")
+@auth.login_required
+def historic():
+    reservoir = request.args.get("reservoir")
+    date = request.args.get("date")
+
+    try:
+        date = dt.datetime.strptime(date, "%Y-%m-%d")
+    except Exception as e:
+        return jsonify({"error": f"specify a date as YYYY-MM-DD: {e}"})
+
+    try:
         historic = get_historic(reservoir=reservoir, date=date)
-        return jsonify({"forecast": forecast, "historic": historic})
+        return jsonify(historic)
     except Exception as e:
         print("Error!", e)
         return jsonify({"Error": f"bad request: {e}"})
