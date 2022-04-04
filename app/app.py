@@ -8,22 +8,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
 from .data import get_levels, get_reservoir_list, get_prediction, get_historic
-from .models import Message, Level, Prediction, Historic, ReservoirPred
+from .models import HTTPError, Level, Prediction, Historic, ReservoirPred
 
 
 app = FastAPI()
 
 security = HTTPBasic()
 
-origins = [
-    "http://localhost:3000",
-    "https://h2ox.org/",
-]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=["*"],
     allow_headers=["*"],
 )
 app.add_middleware(GZipMiddleware)
@@ -45,11 +39,17 @@ def authenticate(credentials: HTTPBasicCredentials = Depends(security)):
 
 
 requires_auth = [Depends(authenticate)]
-other_responses = {401: {"model": Message}, 400: {"model": Message}}
+other_responses = {
+    401: {"model": HTTPError, "description": "Unauthorized"},
+    400: {"model": HTTPError, "description": "Parameter error"},
+}
 
 
-@app.get("/", response_model=Message)
-def index() -> str:
+@app.get(
+    "/",
+    response_model=str,
+)
+async def index():
     return "API is running"
 
 
@@ -77,7 +77,9 @@ async def predictions(date: str):
         date = dt.datetime.strptime(date, "%Y-%m-%d")
         reservoirs = get_reservoir_list()
         data = [
-            ReservoirPred(reservoir=res, prediction=get_prediction(reservoir=res, date=date))
+            ReservoirPred(
+                reservoir=res, prediction=get_prediction(reservoir=res, date=date)
+            )
             for res in reservoirs
         ]
         return data
