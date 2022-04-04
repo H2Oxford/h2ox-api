@@ -47,7 +47,7 @@ requires_auth = [Depends(authenticate)]
 
 
 @app.get("/")
-def index():
+def index() -> str:
     return "API is running"
 
 
