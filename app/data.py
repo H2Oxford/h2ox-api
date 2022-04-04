@@ -4,6 +4,7 @@ import json
 import os
 
 import redis
+from fastapi.encoders import jsonable_encoder
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
@@ -35,7 +36,7 @@ def cache(prefix: str):
                 if data := r.get(key):
                     return json.loads(data)
                 data = func(*args, **kwargs)
-                r.set(key, json.dumps(data), ex=redis_expiry)
+                r.set(key, json.dumps(jsonable_encoder(data)), ex=redis_expiry)
             return data
 
         return wrapper_cache

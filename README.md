@@ -28,7 +28,7 @@ export REDIS_PORT=...
 export REDIS_PW=...
 ```
 ```
-USERNAME=... USERPASSWORD=... PORT=5111 uvicorn app:app --port="$PORT" --reload
+USERNAME=... USERPASSWORD=... uvicorn app:app --port=5111 --reload
 ```
 
 ## Running with Docker
