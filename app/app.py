@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
 from .data import get_levels, get_reservoir_list, get_prediction, get_historic
+from .models import Message, Level, Prediction, Historic, ReservoirPred
 
 
 app = FastAPI()
@@ -44,61 +45,77 @@ def authenticate(credentials: HTTPBasicCredentials = Depends(security)):
 
 
 requires_auth = [Depends(authenticate)]
+other_responses = {401: {"model": Message}, 400: {"model": Message}}
 
 
-@app.get("/")
+@app.get("/", response_model=Message)
 def index() -> str:
     return "API is running"
 
 
-@app.get("/api/levels", dependencies=requires_auth)
-def levels():
-    levels = get_levels()
-    return levels
+@app.get(
+    "/api/levels",
+    dependencies=requires_auth,
+    response_model=list[Level],
+    responses=other_responses,
+)
+async def levels():
+    try:
+        data = get_levels()
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.get("/api/predictions", dependencies=requires_auth)
-def predictions(date: str):
+@app.get(
+    "/api/predictions",
+    dependencies=requires_auth,
+    response_model=list[ReservoirPred],
+)
+async def predictions(date: str):
     try:
         date = dt.datetime.strptime(date, "%Y-%m-%d")
-    except Exception as e:
-        return {"error": f"specify a date as YYYY-MM-DD: {e}"}
-
-    try:
         reservoirs = get_reservoir_list()
         data = [
-            {"reservoir": res, "prediction": get_prediction(reservoir=res, date=date)}
+            ReservoirPred(reservoir=res, prediction=get_prediction(reservoir=res, date=date))
             for res in reservoirs
         ]
         return data
+    except ValueError:
+        raise HTTPException(status_code=400, detail="specify a date as YYYY-MM-DD")
     except Exception as e:
-        print("Error!", e)
-        return {"Error": f"bad request: {e}"}
+        raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.get("/api/prediction", dependencies=requires_auth)
-def prediction(reservoir: str, date: str):
+@app.get(
+    "/api/prediction",
+    dependencies=requires_auth,
+    response_model=list[Prediction],
+    responses=other_responses,
+)
+async def prediction(reservoir: str, date: str):
     try:
         date = dt.datetime.strptime(date, "%Y-%m-%d")
+        data = get_prediction(reservoir=reservoir, date=date)
+        return data
+    except ValueError:
+        raise HTTPException(status_code=400, detail="specify a date as YYYY-MM-DD")
     except Exception as e:
-        return {"error": f"specify a date as YYYY-MM-DD: {e}"}
-
-    try:
-        return get_prediction(reservoir=reservoir, date=date)
-    except Exception as e:
-        print("Error!", e)
-        return {"Error": f"bad request: {e}"}
+        raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.get("/api/historic", dependencies=requires_auth)
-def historic(reservoir: str, date: str):
+@app.get(
+    "/api/historic",
+    dependencies=requires_auth,
+    response_model=list[Historic],
+    responses=other_responses,
+)
+async def historic(reservoir: str, date: str):
     try:
         date = dt.datetime.strptime(date, "%Y-%m-%d")
+        data = get_historic(reservoir=reservoir, date=date)
+        return data
+    except ValueError:
+        raise HTTPException(status_code=400, detail="specify a date as YYYY-MM-DD")
     except Exception as e:
-        return {"error": f"specify a date as YYYY-MM-DD: {e}"}
-
-    try:
-        return get_historic(reservoir=reservoir, date=date)
-    except Exception as e:
-        print("Error!", e)
-        return {"Error": f"bad request: {e}"}
+        raise HTTPException(status_code=400, detail=str(e))

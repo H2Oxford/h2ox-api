@@ -7,6 +7,8 @@ import redis
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
+from .models import Level, Prediction, Historic
+
 bqclient = bigquery.Client(
     credentials=service_account.Credentials.from_service_account_info(
         json.loads(os.environ["GOOGLE_CREDENTIALS"])
@@ -53,7 +55,7 @@ def get_reservoir_list() -> list[str]:
 
 
 @cache("forecast")
-def get_prediction(*, reservoir: str, date: str) -> list[dict[str, str]]:
+def get_prediction(*, reservoir: str, date: str) -> list[Prediction]:
     reservoir = reservoir.split(" ")[0]  # naive prevent any injection!
     query = f"""
     SELECT forecast
@@ -66,17 +68,17 @@ def get_prediction(*, reservoir: str, date: str) -> list[dict[str, str]]:
     job = bqclient.query(query)
     data = [row.values() for row in job][0][0]
     data = [
-        {
-            "x": (date + dt.timedelta(days=i)).isoformat(),
-            "y": val,
-        }
+        Prediction(
+            date=(date + dt.timedelta(days=i)).isoformat(),
+            level=val,
+        )
         for i, val in enumerate(data)
     ]
     return data
 
 
 @cache("historic")
-def get_historic(*, reservoir, date) -> list[dict[str, str]]:
+def get_historic(*, reservoir, date) -> list[Historic]:
     start_date = date - dt.timedelta(days=365)
     query = f"""
     SELECT DATETIME, WATER_VOLUME * 1000
@@ -89,18 +91,18 @@ def get_historic(*, reservoir, date) -> list[dict[str, str]]:
     job = bqclient.query(query)
     data = (row.values() for row in job)
     data = [
-        {
-            "x": row[0].isoformat(),
-            "volume": row[1],
-            "precip": 0,
-        }
+        Historic(
+            date=row[0].isoformat(),
+            level=row[1],
+            precip=0,
+        )
         for row in data
     ]
     return data
 
 
 @cache("levels")
-def get_levels() -> list[dict[str, str]]:
+def get_levels() -> list[Level]:
     query = """
     SELECT
         historic.RESERVOIR_NAME,
@@ -116,5 +118,6 @@ def get_levels() -> list[dict[str, str]]:
     ) AS historic
     """
     job = bqclient.query(query)
-    data = [dict(row) for row in job]
+    data = [row.values() for row in job]
+    data = [Level(name=row[0], level=row[1]) for row in data]
     return data
