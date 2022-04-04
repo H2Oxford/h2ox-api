@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
 from .data import get_levels, get_reservoir_list, get_prediction, get_historic
-from .models import HTTPError, Level, Prediction, Historic, ReservoirPred
+from .models import HTTPError, Level, Prediction, Historic
 
 
 app = FastAPI()
@@ -68,23 +68,14 @@ async def levels():
 
 
 @app.get(
-    "/api/predictions",
+    "/api/reservoirs",
     dependencies=requires_auth,
-    response_model=list[ReservoirPred],
+    response_model=list[str],
 )
-async def predictions(date: str):
+async def reservoirs():
     try:
-        date = dt.datetime.strptime(date, "%Y-%m-%d")
-        reservoirs = get_reservoir_list()
-        data = [
-            ReservoirPred(
-                reservoir=res, prediction=get_prediction(reservoir=res, date=date)
-            )
-            for res in reservoirs
-        ]
+        data = get_reservoir_list()
         return data
-    except ValueError:
-        raise HTTPException(status_code=400, detail="specify a date as YYYY-MM-DD")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
