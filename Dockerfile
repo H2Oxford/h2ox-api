@@ -11,4 +11,4 @@ COPY . .
 ENV PORT 8080
 EXPOSE $PORT
 
-ENTRYPOINT gunicorn app:app --bind="0.0.0.0:$PORT"
+ENTRYPOINT uvicorn app:app --host="0.0.0.0" --port="$PORT"
