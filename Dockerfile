@@ -11,4 +11,4 @@ COPY . .
 ENV PORT 8080
 EXPOSE $PORT
 
-ENTRYPOINT uvicorn app:app --host="0.0.0.0" --port="$PORT"
+ENTRYPOINT uvicorn app.app:app --host=0.0.0.0 --port=$PORT
