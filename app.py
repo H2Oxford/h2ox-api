@@ -1,15 +1,15 @@
-import os
 import datetime as dt
 import functools
 import json
+import os
 
-from flask import Flask, request, jsonify
-from flask_httpauth import HTTPBasicAuth
-from flask_cors import CORS
+import redis
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from google.cloud import bigquery
 from google.oauth2 import service_account
-import redis
-from werkzeug.security import generate_password_hash, check_password_hash
+
 
 bqclient = bigquery.Client(
     credentials=service_account.Credentials.from_service_account_info(
@@ -121,39 +121,38 @@ def get_levels():
     return data
 
 
-app = Flask(__name__)
-auth = HTTPBasicAuth()
-CORS(app)
-users = {os.environ["USERNAME"]: generate_password_hash(os.environ["USERPASSWORD"])}
+app = FastAPI()
+origins = [
+    "http://localhost:3000",
+    "https://h2ox.org/",
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.add_middleware(GZipMiddleware)
 
 
-@auth.verify_password
-def verify_password(username, password):
-    if username in users and check_password_hash(users.get(username), password):
-        return username
-
-
-@app.route("/")
+@app.get("/")
 def index():
     return "API is running"
 
 
-@app.route("/api/levels")
-@auth.login_required
+@app.get("/api/levels")
 def levels():
     levels = get_levels()
-    return jsonify(levels)
+    return levels
 
 
-@app.route("/api/predictions")
-@auth.login_required
-def predictions():
-    date = request.args.get("date")
-
+@app.get("/api/predictions")
+def predictions(date: str):
     try:
         date = dt.datetime.strptime(date, "%Y-%m-%d")
     except Exception as e:
-        return jsonify({"error": f"specify a date as YYYY-MM-DD: {e}"})
+        return {"error": f"specify a date as YYYY-MM-DD: {e}"}
 
     try:
         reservoirs = get_reservoir_list()
@@ -161,47 +160,35 @@ def predictions():
             {"reservoir": res, "prediction": get_prediction(reservoir=res, date=date)}
             for res in reservoirs
         ]
-        return jsonify(data)
+        return data
     except Exception as e:
         print("Error!", e)
-        return jsonify({"Error": f"bad request: {e}"})
+        return {"Error": f"bad request: {e}"}
 
 
-@app.route("/api/prediction")
-@auth.login_required
-def prediction():
-    reservoir = request.args.get("reservoir")
-    date = request.args.get("date")
-
+@app.get("/api/prediction")
+def prediction(reservoir: str, date: str):
     try:
         date = dt.datetime.strptime(date, "%Y-%m-%d")
     except Exception as e:
-        return jsonify({"error": f"specify a date as YYYY-MM-DD: {e}"})
+        return {"error": f"specify a date as YYYY-MM-DD: {e}"}
 
     try:
-        return jsonify(get_prediction(reservoir=reservoir, date=date))
+        return get_prediction(reservoir=reservoir, date=date)
     except Exception as e:
         print("Error!", e)
-        return jsonify({"Error": f"bad request: {e}"})
+        return {"Error": f"bad request: {e}"}
 
 
-@app.route("/api/historic")
-@auth.login_required
-def historic():
-    reservoir = request.args.get("reservoir")
-    date = request.args.get("date")
-
+@app.get("/api/historic")
+def historic(reservoir: str, date: str):
     try:
         date = dt.datetime.strptime(date, "%Y-%m-%d")
     except Exception as e:
-        return jsonify({"error": f"specify a date as YYYY-MM-DD: {e}"})
+        return {"error": f"specify a date as YYYY-MM-DD: {e}"}
 
     try:
-        return jsonify(get_historic(reservoir=reservoir, date=date))
+        return get_historic(reservoir=reservoir, date=date)
     except Exception as e:
         print("Error!", e)
-        return jsonify({"Error": f"bad request: {e}"})
-
-
-if __name__ == "__main__":
-    app.run()
+        return {"Error": f"bad request: {e}"}

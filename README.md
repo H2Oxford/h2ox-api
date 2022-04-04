@@ -19,27 +19,33 @@ A username and password are required. Please contact us for access!
 
     data = json.loads(r.text)
 
-## Running the flask app
+## Running the app
 First load Google Cloud credentials from a Service Account JSON:
 ```
 export GOOGLE_CREDENTIALS=$(cat credentials.json)
+export REDIS_HOST=...
+export REDIS_PORT=...
+export REDIS_PW=...
 ```
 ```
-USERNAME=... USERPASSWORD=... FLASK_DEBUG=1 FLASK_APP=app.py flask run --port=5111
+USERNAME=... USERPASSWORD=... PORT=5111 uvicorn app:app --port="$PORT" --reload
 ```
 
 ## Running with Docker
 ```
-docker build -y h2ox-api .
+docker build -t h2ox-api .
 ```
 
 ```
 docker run \
-  -e GOOGLE_CREDENTIALS=$GOOGLE_CREDENTIALS \
+  -e GOOGLE_CREDENTIALS="$GOOGLE_CREDENTIALS" \
+  -e REDIS_HOST="$REDIS_HOST" \
+  -e REDIS_PORT="$REDIS_PORT" \
+  -e REDIS_PW=$REDIS_PW \
   -e USERNAME=... \
   -e PASSWORD=... \
-  -e PORT=8080
-  -p 8080:8080 \
+  -e PORT=5111 \
+  -p 5111:5111 \
   h2ox-api
 ```
 
