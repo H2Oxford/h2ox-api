@@ -21,7 +21,7 @@ r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PW)
 redis_expiry = 60 * 60 * 24 * 2  # 2 days
 
 
-def cache(prefix):
+def cache(prefix: str):
     def decorator_cache(func):
         @functools.wraps(func)
         def wrapper_cache(*args, **kwargs):
@@ -42,9 +42,10 @@ def cache(prefix):
 
 
 @cache("reservoirs")
-def get_reservoir_list():
+def get_reservoir_list() -> list[str]:
     query = """
-    SELECT DISTINCT(reservoir) FROM `oxeo-main.wave2web.prediction`
+    SELECT DISTINCT(reservoir)
+    FROM `oxeo-main.wave2web.prediction`
     """
     job = bqclient.query(query)
     data = [row.values()[0] for row in job]
@@ -52,10 +53,11 @@ def get_reservoir_list():
 
 
 @cache("forecast")
-def get_prediction(*, reservoir, date):
+def get_prediction(*, reservoir: str, date: str) -> list[dict[str, str]]:
     reservoir = reservoir.split(" ")[0]  # naive prevent any injection!
     query = f"""
-    SELECT forecast FROM `oxeo-main.wave2web.prediction`
+    SELECT forecast
+    FROM `oxeo-main.wave2web.prediction`
     WHERE `reservoir` = "{reservoir}"
     AND `date` = "{date.date().isoformat()}"
     ORDER BY `timestamp` DESC
@@ -74,10 +76,11 @@ def get_prediction(*, reservoir, date):
 
 
 @cache("historic")
-def get_historic(*, reservoir, date):
+def get_historic(*, reservoir, date) -> list[dict[str, str]]:
     start_date = date - dt.timedelta(days=365)
     query = f"""
-    SELECT DATETIME, WATER_VOLUME * 1000 FROM `oxeo-main.wave2web.reservoir-data`
+    SELECT DATETIME, WATER_VOLUME * 1000
+    FROM `oxeo-main.wave2web.reservoir-data`
     WHERE `RESERVOIR_NAME` = "{reservoir}"
     AND `DATETIME` >= "{start_date.date().isoformat()}"
     AND `DATETIME` < "{date.date().isoformat()}"
@@ -97,7 +100,7 @@ def get_historic(*, reservoir, date):
 
 
 @cache("levels")
-def get_levels():
+def get_levels() -> list[dict[str, str]]:
     query = """
     SELECT
         historic.RESERVOIR_NAME,
