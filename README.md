@@ -1,9 +1,9 @@
 # wave2web-api
 A basic API Flask app to serve wave2web inference.
 
-The [API is live here](https://h2ox-api-kdjsv6lupq-ez.a.run.app/).
+The [API is live here](https://api.h2ox.org/).
 
-You can see the API's [OpenAPI documentation here](https://h2ox-api-kdjsv6lupq-ez.a.run.app/docs).
+You can see the API's [OpenAPI documentation here](https://api.h2ox.org/docs).
 
 A username and password are required. Please contact us for access!
 
