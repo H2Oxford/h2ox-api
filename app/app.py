@@ -1,4 +1,3 @@
-import datetime as dt
 import os
 import secrets
 
@@ -7,8 +6,8 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
-from .data import get_levels, get_reservoir_list, get_prediction, get_historic
-from .models import HTTPError, Level, Prediction, Historic
+from .data import get_reservoirs, get_prediction, get_historic
+from .models import HTTPError, Timeseries, ReservoirList
 
 
 app = FastAPI()
@@ -54,27 +53,14 @@ async def index():
 
 
 @app.get(
-    "/api/levels",
-    dependencies=requires_auth,
-    response_model=list[Level],
-    responses=other_responses,
-)
-async def levels():
-    try:
-        data = get_levels()
-        return data
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@app.get(
     "/api/reservoirs",
     dependencies=requires_auth,
-    response_model=list[str],
+    response_model=ReservoirList,
+    responses=other_responses,
 )
 async def reservoirs():
     try:
-        data = get_reservoir_list()
+        data = get_reservoirs()
         return data
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -83,16 +69,13 @@ async def reservoirs():
 @app.get(
     "/api/prediction",
     dependencies=requires_auth,
-    response_model=list[Prediction],
+    response_model=Timeseries,
     responses=other_responses,
 )
-async def prediction(reservoir: str, date: str):
+async def prediction(reservoir: str):
     try:
-        date = dt.datetime.strptime(date, "%Y-%m-%d")
-        data = get_prediction(reservoir=reservoir, date=date)
+        data = get_prediction(reservoir=reservoir)
         return data
-    except ValueError:
-        raise HTTPException(status_code=400, detail="specify a date as YYYY-MM-DD")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -100,15 +83,12 @@ async def prediction(reservoir: str, date: str):
 @app.get(
     "/api/historic",
     dependencies=requires_auth,
-    response_model=list[Historic],
+    response_model=Timeseries,
     responses=other_responses,
 )
-async def historic(reservoir: str, date: str):
+async def historic(reservoir: str):
     try:
-        date = dt.datetime.strptime(date, "%Y-%m-%d")
-        data = get_historic(reservoir=reservoir, date=date)
+        data = get_historic(reservoir=reservoir)
         return data
-    except ValueError:
-        raise HTTPException(status_code=400, detail="specify a date as YYYY-MM-DD")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

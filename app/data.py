@@ -8,7 +8,7 @@ from fastapi.encoders import jsonable_encoder
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
-from .models import Level, Prediction, Historic
+from .models import Level, Reservoir, Timeseries, ReservoirList
 
 bqclient = bigquery.Client(
     credentials=service_account.Credentials.from_service_account_info(
@@ -44,42 +44,28 @@ def cache(prefix: str):
     return decorator_cache
 
 
-@cache("reservoirs")
-def get_reservoir_list() -> list[str]:
-    query = """
-    SELECT DISTINCT(reservoir)
-    FROM `oxeo-main.wave2web.prediction`
-    """
-    job = bqclient.query(query)
-    data = [row.values()[0] for row in job]
-    return data
-
-
 @cache("forecast")
-def get_prediction(*, reservoir: str, date: str) -> list[Prediction]:
-    reservoir = reservoir.split(" ")[0]  # naive prevent any injection!
+def get_prediction(*, reservoir: str) -> Timeseries:
     query = f"""
-    SELECT forecast
+    SELECT date, forecast
     FROM `oxeo-main.wave2web.prediction`
     WHERE `reservoir` = "{reservoir}"
-    AND `date` = "{date.date().isoformat()}"
-    ORDER BY `timestamp` DESC
+    ORDER BY `date` DESC, `timestamp` DESC
     LIMIT 1
     """
     job = bqclient.query(query)
-    data = [row.values() for row in job][0][0]
-    data = [
-        Prediction(
-            date=(date + dt.timedelta(days=i)).isoformat(),
-            level=val,
-        )
-        for i, val in enumerate(data)
+    date, forecast = [row.values() for row in job][0]
+    forecast = [
+        Level(date=(date + dt.timedelta(days=i)).isoformat(), level=val)
+        for i, val in enumerate(forecast)
     ]
-    return data
+    result = Timeseries(reservoir=reservoir, ref_date=date, timeseries=forecast)
+    return result
 
 
 @cache("historic")
-def get_historic(*, reservoir, date) -> list[Historic]:
+def get_historic(*, reservoir: str) -> Timeseries:
+    date = dt.datetime(2021, 9, 8)  # TODO this shouldn't be hardcoded
     start_date = date - dt.timedelta(days=365)
     query = f"""
     SELECT DATETIME, WATER_VOLUME * 1000
@@ -90,26 +76,21 @@ def get_historic(*, reservoir, date) -> list[Historic]:
     ORDER BY `DATETIME`
     """
     job = bqclient.query(query)
-    data = (row.values() for row in job)
-    data = [
-        Historic(
-            date=row[0].isoformat(),
-            level=row[1],
-            precip=0,
-        )
-        for row in data
-    ]
-    return data
+    historic = (row.values() for row in job)
+    historic = [Level(date=row[0], level=row[1]) for row in historic]
+    result = Timeseries(reservoir=reservoir, ref_date=date, timeseries=historic)
+    return result
 
 
 @cache("levels")
-def get_levels() -> list[Level]:
+def get_reservoirs() -> ReservoirList:
     query = """
     SELECT
         historic.RESERVOIR_NAME,
+        historic.DATETIME,
         historic.WATER_VOLUME * 1000,
     FROM (
-        SELECT t1.RESERVOIR_NAME, t1.WATER_VOLUME
+        SELECT t1.RESERVOIR_NAME, t1.WATER_VOLUME, t1.DATETIME
         FROM `oxeo-main.wave2web.reservoir-data` t1
         WHERE t1.DATETIME = (
             SELECT MAX(t2.DATETIME)
@@ -120,5 +101,10 @@ def get_levels() -> list[Level]:
     """
     job = bqclient.query(query)
     data = [row.values() for row in job]
-    data = [Level(name=row[0], level=row[1]) for row in data]
-    return data
+    result = ReservoirList(
+        reservoirs=[
+            Reservoir(name=row[0], level=Level(date=row[1], level=row[2]))
+            for row in data
+        ]
+    )
+    return result

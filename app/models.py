@@ -1,3 +1,5 @@
+import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -10,21 +12,21 @@ class HTTPError(BaseModel):
         }
 
 
-class Message(BaseModel):
-    message: str
-
-
 class Level(BaseModel):
+    date: datetime.date = Field(..., example=datetime.date(2022, 3, 12))
+    level: float = Field(..., example=138)
+
+
+class Reservoir(BaseModel):
     name: str = Field(..., example="Harangi")
-    level: float = Field(..., example=138)
+    level: Level = Field(..., example=Level(date="2021-01-01", level=138))
 
 
-class Prediction(BaseModel):
-    date: str = Field(..., example="2022-11-02")
-    level: float = Field(..., example=138)
+class Timeseries(BaseModel):
+    reservoir: str
+    ref_date: datetime.date = Field(..., example=datetime.date(2022, 3, 12))
+    timeseries: list[Level]
 
 
-class Historic(BaseModel):
-    date: str = Field(..., example="2022-11-02")
-    level: float = Field(..., example=138)
-    precip: float = Field(..., example=2.4)
+class ReservoirList(BaseModel):
+    reservoirs: list[Reservoir]
