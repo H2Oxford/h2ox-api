@@ -49,8 +49,8 @@ def get_prediction(*, reservoir: str) -> Timeseries:
     query = f"""
     SELECT date, forecast
     FROM `oxeo-main.wave2web.prediction`
-    WHERE `reservoir` = "{reservoir}"
-    ORDER BY `date` DESC, `timestamp` DESC
+    WHERE reservoir = "{reservoir}"
+    ORDER BY date DESC, timestamp DESC
     LIMIT 1
     """
     job = bqclient.query(query)
@@ -70,12 +70,17 @@ def get_historic(*, reservoir: str) -> Timeseries:
     query = f"""
     SELECT DATETIME, WATER_VOLUME * 1000
     FROM `oxeo-main.wave2web.reservoir-data`
-    WHERE `RESERVOIR_NAME` = "{reservoir}"
-    AND `DATETIME` >= "{start_date.date().isoformat()}"
-    AND `DATETIME` < "{date.date().isoformat()}"
-    ORDER BY `DATETIME`
+    WHERE RESERVOIR_NAME = @reservoir
+    AND DATETIME >= "{start_date.date().isoformat()}"
+    AND DATETIME < "{date.date().isoformat()}"
+    ORDER BY DATETIME
     """
-    job = bqclient.query(query)
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("reservoir", "STRING", reservoir),
+        ]
+    )
+    job = bqclient.query(query, job_config=job_config)
     historic = (row.values() for row in job)
     historic = [Level(date=row[0], level=row[1]) for row in historic]
     result = Timeseries(reservoir=reservoir, ref_date=date, timeseries=historic)
