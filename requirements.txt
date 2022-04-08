@@ -2,3 +2,4 @@ fastapi == 0.75.1
 uvicorn[standard] == 0.17.6
 google-cloud-bigquery==2.32.0
 redis==4.2.2
+shapely==1.8.1post1

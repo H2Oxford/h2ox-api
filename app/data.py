@@ -4,11 +4,12 @@ import json
 import os
 
 import redis
+import shapely.wkt
 from fastapi.encoders import jsonable_encoder
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
-from .models import Level, Reservoir, Timeseries, ReservoirList
+from .models import Level, Geometry, Reservoir, Timeseries, ReservoirList
 
 bqclient = bigquery.Client(
     credentials=service_account.Credentials.from_service_account_info(
@@ -22,6 +23,8 @@ REDIS_PW = os.environ.get("REDIS_PW", None)
 CACHE_BUST = os.environ.get("REDIS_CACHE_BUST", False)
 r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PW)
 redis_expiry = 60 * 60 * 24 * 2  # 2 days
+
+latest_date = dt.date(2021, 9, 8)  # TODO this shouldn't be hardcoded
 
 
 def cache(prefix: str):
@@ -46,14 +49,19 @@ def cache(prefix: str):
 
 @cache("forecast")
 def get_prediction(*, reservoir: str) -> Timeseries:
-    query = f"""
+    query = """
     SELECT date, forecast
     FROM `oxeo-main.wave2web.prediction`
-    WHERE reservoir = "{reservoir}"
+    WHERE reservoir = @reservoir
     ORDER BY date DESC, timestamp DESC
     LIMIT 1
     """
-    job = bqclient.query(query)
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("reservoir", "STRING", reservoir),
+        ]
+    )
+    job = bqclient.query(query, job_config=job_config)
     date, forecast = [row.values() for row in job][0]
     forecast = [
         Level(date=(date + dt.timedelta(days=i)).isoformat(), level=val)
@@ -65,14 +73,13 @@ def get_prediction(*, reservoir: str) -> Timeseries:
 
 @cache("historic")
 def get_historic(*, reservoir: str) -> Timeseries:
-    date = dt.datetime(2021, 9, 8)  # TODO this shouldn't be hardcoded
-    start_date = date - dt.timedelta(days=365)
+    start_date = latest_date - dt.timedelta(days=365)
     query = f"""
     SELECT DATETIME, WATER_VOLUME * 1000
     FROM `oxeo-main.wave2web.reservoir-data`
     WHERE RESERVOIR_NAME = @reservoir
-    AND DATETIME >= "{start_date.date().isoformat()}"
-    AND DATETIME < "{date.date().isoformat()}"
+    AND DATETIME >= "{start_date}"
+    AND DATETIME < "{latest_date}"
     ORDER BY DATETIME
     """
     job_config = bigquery.QueryJobConfig(
@@ -83,32 +90,38 @@ def get_historic(*, reservoir: str) -> Timeseries:
     job = bqclient.query(query, job_config=job_config)
     historic = (row.values() for row in job)
     historic = [Level(date=row[0], level=row[1]) for row in historic]
-    result = Timeseries(reservoir=reservoir, ref_date=date, timeseries=historic)
+    result = Timeseries(reservoir=reservoir, ref_date=latest_date, timeseries=historic)
     return result
 
 
 @cache("levels")
 def get_reservoirs() -> ReservoirList:
-    query = """
+    query = f"""
     SELECT
-        historic.RESERVOIR_NAME,
-        historic.DATETIME,
+        DISTINCT(pred.reservoir),
         historic.WATER_VOLUME * 1000,
-    FROM (
-        SELECT t1.RESERVOIR_NAME, t1.WATER_VOLUME, t1.DATETIME
-        FROM `oxeo-main.wave2web.reservoir-data` t1
-        WHERE t1.DATETIME = (
-            SELECT MAX(t2.DATETIME)
-            FROM `oxeo-main.wave2web.reservoir-data` t2
-            WHERE t2.RESERVOIR_NAME = t1.RESERVOIR_NAME
-        )
-    ) AS historic
+        historic.FULL_WATER_LEVEL,
+        tracked.lake_geom
+    FROM
+        `oxeo-main.wave2web.prediction` AS pred
+
+    INNER JOIN `oxeo-main.wave2web.tracked-reservoirs` AS tracked
+    ON pred.reservoir=tracked.name
+
+    INNER JOIN `oxeo-main.wave2web.reservoir-data` AS historic
+    ON pred.reservoir=historic.RESERVOIR_NAME
+    WHERE historic.DATETIME = "{latest_date}"
     """
     job = bqclient.query(query)
     data = [row.values() for row in job]
     result = ReservoirList(
         reservoirs=[
-            Reservoir(name=row[0], level=Level(date=row[1], level=row[2]))
+            Reservoir(
+                name=row[0],
+                level=Level(date=latest_date, level=row[1]),
+                full_level=row[2],
+                geom=Geometry(**shapely.wkt.loads(row[3]).__geo_interface__),
+            )
             for row in data
         ]
     )
