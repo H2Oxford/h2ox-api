@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
 from .data import get_reservoirs, get_prediction, get_historic, get_precip
-from .models import HTTPError, Timeseries, ReservoirList
+from .models import HTTPError, PrecipTimeseries, LevelTimeseries, ReservoirList
 
 
 app = FastAPI()
@@ -69,7 +69,7 @@ async def reservoirs():
 @app.get(
     "/api/prediction",
     dependencies=requires_auth,
-    response_model=Timeseries,
+    response_model=LevelTimeseries,
     responses=other_responses,
 )
 async def prediction(reservoir: str):
@@ -83,7 +83,7 @@ async def prediction(reservoir: str):
 @app.get(
     "/api/historic",
     dependencies=requires_auth,
-    response_model=Timeseries,
+    response_model=LevelTimeseries,
     responses=other_responses,
 )
 async def historic(reservoir: str):
@@ -97,7 +97,7 @@ async def historic(reservoir: str):
 @app.get(
     "/api/precip",
     dependencies=requires_auth,
-    response_model=Timeseries,
+    response_model=PrecipTimeseries,
     responses=other_responses,
 )
 async def precip(reservoir: str):

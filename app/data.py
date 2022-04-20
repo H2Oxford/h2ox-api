@@ -9,7 +9,7 @@ from fastapi.encoders import jsonable_encoder
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
-from .models import TimeValue, Geometry, Reservoir, Timeseries, ReservoirList
+from .models import Level, Precip, Geometry, Reservoir, PrecipTimeseries, ReservoirList, LevelTimeseries
 
 bqclient = bigquery.Client(
     credentials=service_account.Credentials.from_service_account_info(
@@ -48,7 +48,7 @@ def cache(prefix: str):
 
 
 @cache("prediction")
-def get_prediction(*, reservoir: str) -> Timeseries:
+def get_prediction(*, reservoir: str) -> LevelTimeseries:
     query = """
     SELECT date, forecast
     FROM `oxeo-main.wave2web.prediction`
@@ -64,15 +64,15 @@ def get_prediction(*, reservoir: str) -> Timeseries:
     job = bqclient.query(query, job_config=job_config)
     date, forecast = [row.values() for row in job][0]
     forecast = [
-        TimeValue(date=(date + dt.timedelta(days=i)).isoformat(), value=val)
+        Level(date=(date + dt.timedelta(days=i)).isoformat(), value=val, baseline=0)
         for i, val in enumerate(forecast)
     ]
-    result = Timeseries(reservoir=reservoir, ref_date=date, timeseries=forecast)
+    result = LevelTimeseries(reservoir=reservoir, ref_date=date, timeseries=forecast)
     return result
 
 
 @cache("historic")
-def get_historic(*, reservoir: str) -> Timeseries:
+def get_historic(*, reservoir: str) -> LevelTimeseries:
     start_date = latest_date - dt.timedelta(days=365)
     query = f"""
     SELECT DATETIME, WATER_VOLUME * 1000
@@ -89,17 +89,44 @@ def get_historic(*, reservoir: str) -> Timeseries:
     )
     job = bqclient.query(query, job_config=job_config)
     historic = (row.values() for row in job)
-    historic = [TimeValue(date=row[0], value=row[1]) for row in historic]
-    result = Timeseries(reservoir=reservoir, ref_date=latest_date, timeseries=historic)
+    historic = [Level(date=row[0], value=row[1], baseline=0) for row in historic]
+    result = LevelTimeseries(reservoir=reservoir, ref_date=latest_date, timeseries=historic)
     return result
 
 
 @cache("precip")
-def get_precip(*, reservoir: str) -> None:
+def get_precip(*, reservoir: str) -> PrecipTimeseries:
     start_date = latest_date - dt.timedelta(days=365)
     query = f"""
-    SELECT date, ROUND(value, 3) AS precip
+    WITH
+    cum AS (
+        SELECT
+            date AS cum_date,
+            SUM(value) OVER (PARTITION BY EXTRACT(YEAR from date) ORDER BY date) AS cum_value
+        FROM `oxeo-main.wave2web.precipitation`
+        WHERE reservoir = @reservoir
+    ),
+    avg_cum AS (
+        SELECT
+            EXTRACT(DAYOFYEAR from cum_date) AS doy,
+            AVG(cum_value) AS avg_cum_value
+        FROM cum
+        GROUP BY EXTRACT(DAYOFYEAR from cum_date)
+    )
+
+    SELECT
+        date,
+        ROUND(value, 3) AS value,
+        ROUND(cum.cum_value, 3) AS cum_value,
+        ROUND(avg_cum.avg_cum_value, 3) AS avg_cum_value
     FROM `oxeo-main.wave2web.precipitation`
+
+    INNER JOIN avg_cum
+    ON avg_cum.doy=EXTRACT(DAYOFYEAR from date)
+
+    INNER JOIN cum
+    ON cum.cum_date=date
+
     WHERE reservoir = @reservoir
     AND date >= "{start_date}"
     AND date <= "{latest_date}"
@@ -112,8 +139,8 @@ def get_precip(*, reservoir: str) -> None:
     )
     job = bqclient.query(query, job_config=job_config)
     historic = (row.values() for row in job)
-    historic = [TimeValue(date=row[0], value=row[1]) for row in historic]
-    result = Timeseries(reservoir=reservoir, ref_date=latest_date, timeseries=historic)
+    historic = [Precip(date=row[0], value=row[1], cumulative=row[2], cumulative_baseline=row[3]) for row in historic]
+    result = PrecipTimeseries(reservoir=reservoir, ref_date=latest_date, timeseries=historic)
     return result
 
 
@@ -141,7 +168,7 @@ def get_reservoirs() -> ReservoirList:
         reservoirs=[
             Reservoir(
                 name=row[0],
-                level=TimeValue(date=latest_date, value=row[1]),
+                level=Level(date=latest_date, value=row[1], baseline=0),
                 full_level=row[2],
                 geom=Geometry(**shapely.wkt.loads(row[3]).__geo_interface__),
             )
