@@ -75,8 +75,25 @@ def get_prediction(*, reservoir: str) -> LevelTimeseries:
 def get_historic(*, reservoir: str) -> LevelTimeseries:
     start_date = latest_date - dt.timedelta(days=365)
     query = f"""
-    SELECT DATETIME, WATER_VOLUME * 1000
+    WITH
+    baseline AS (
+        SELECT
+            EXTRACT(DAYOFYEAR from DATETIME) AS doy,
+            AVG(WATER_VOLUME) AS baseline_value
+        FROM `oxeo-main.wave2web.reservoir-data`
+        WHERE RESERVOIR_NAME = @reservoir
+        GROUP BY EXTRACT(DAYOFYEAR from DATETIME)
+    )
+
+    SELECT
+        DATETIME AS date,
+        WATER_VOLUME * 1000 AS value,
+        ROUND(baseline.baseline_value * 1000) AS baseline_value,
     FROM `oxeo-main.wave2web.reservoir-data`
+
+    INNER JOIN baseline
+    ON baseline.doy=EXTRACT(DAYOFYEAR from DATETIME)
+
     WHERE RESERVOIR_NAME = @reservoir
     AND DATETIME >= "{start_date}"
     AND DATETIME <= "{latest_date}"
@@ -89,7 +106,7 @@ def get_historic(*, reservoir: str) -> LevelTimeseries:
     )
     job = bqclient.query(query, job_config=job_config)
     historic = (row.values() for row in job)
-    historic = [Level(date=row[0], value=row[1], baseline=0) for row in historic]
+    historic = [Level(date=row[0], value=row[1], baseline=row[2]) for row in historic]
     result = LevelTimeseries(reservoir=reservoir, ref_date=latest_date, timeseries=historic)
     return result
 
