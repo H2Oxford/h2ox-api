@@ -1,5 +1,5 @@
 # wave2web-api
-A basic API Flask app to serve wave2web inference.
+A basic FastAPI app to serve wave2web inference.
 
 The [API is live here](https://api.h2ox.org/).
 
@@ -16,7 +16,7 @@ export REDIS_HOST=...
 export REDIS_PORT=...
 export REDIS_PW=...
 
-USERNAME=... PASSWORD=... uvicorn app:app --port=5111 --reload
+USERNAME=... PASSWORD=... uvicorn app.app:app --port=5111 --reload
 ```
 
 ## Running with Docker
