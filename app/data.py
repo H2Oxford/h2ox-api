@@ -9,7 +9,7 @@ from fastapi.encoders import jsonable_encoder
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
-from .models import Level, Geometry, Reservoir, Timeseries, ReservoirList
+from .models import TimeValue, Geometry, Reservoir, Timeseries, ReservoirList
 
 bqclient = bigquery.Client(
     credentials=service_account.Credentials.from_service_account_info(
@@ -47,7 +47,7 @@ def cache(prefix: str):
     return decorator_cache
 
 
-@cache("forecast")
+@cache("prediction")
 def get_prediction(*, reservoir: str) -> Timeseries:
     query = """
     SELECT date, forecast
@@ -64,7 +64,7 @@ def get_prediction(*, reservoir: str) -> Timeseries:
     job = bqclient.query(query, job_config=job_config)
     date, forecast = [row.values() for row in job][0]
     forecast = [
-        Level(date=(date + dt.timedelta(days=i)).isoformat(), level=val)
+        TimeValue(date=(date + dt.timedelta(days=i)).isoformat(), value=val)
         for i, val in enumerate(forecast)
     ]
     result = Timeseries(reservoir=reservoir, ref_date=date, timeseries=forecast)
@@ -79,7 +79,7 @@ def get_historic(*, reservoir: str) -> Timeseries:
     FROM `oxeo-main.wave2web.reservoir-data`
     WHERE RESERVOIR_NAME = @reservoir
     AND DATETIME >= "{start_date}"
-    AND DATETIME < "{latest_date}"
+    AND DATETIME <= "{latest_date}"
     ORDER BY DATETIME
     """
     job_config = bigquery.QueryJobConfig(
@@ -89,12 +89,35 @@ def get_historic(*, reservoir: str) -> Timeseries:
     )
     job = bqclient.query(query, job_config=job_config)
     historic = (row.values() for row in job)
-    historic = [Level(date=row[0], level=row[1]) for row in historic]
+    historic = [TimeValue(date=row[0], value=row[1]) for row in historic]
     result = Timeseries(reservoir=reservoir, ref_date=latest_date, timeseries=historic)
     return result
 
 
-@cache("levels")
+@cache("precip")
+def get_precip(*, reservoir: str) -> None:
+    start_date = latest_date - dt.timedelta(days=365)
+    query = f"""
+    SELECT date, ROUND(value, 3) AS precip
+    FROM `oxeo-main.wave2web.precipitation`
+    WHERE reservoir = @reservoir
+    AND date >= "{start_date}"
+    AND date <= "{latest_date}"
+    ORDER BY date
+    """
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("reservoir", "STRING", reservoir),
+        ]
+    )
+    job = bqclient.query(query, job_config=job_config)
+    historic = (row.values() for row in job)
+    historic = [TimeValue(date=row[0], value=row[1]) for row in historic]
+    result = Timeseries(reservoir=reservoir, ref_date=latest_date, timeseries=historic)
+    return result
+
+
+@cache("reservoirs")
 def get_reservoirs() -> ReservoirList:
     query = f"""
     SELECT
@@ -118,7 +141,7 @@ def get_reservoirs() -> ReservoirList:
         reservoirs=[
             Reservoir(
                 name=row[0],
-                level=Level(date=latest_date, level=row[1]),
+                level=TimeValue(date=latest_date, value=row[1]),
                 full_level=row[2],
                 geom=Geometry(**shapely.wkt.loads(row[3]).__geo_interface__),
             )

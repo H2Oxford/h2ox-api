@@ -6,7 +6,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
-from .data import get_reservoirs, get_prediction, get_historic
+from .data import get_reservoirs, get_prediction, get_historic, get_precip
 from .models import HTTPError, Timeseries, ReservoirList
 
 
@@ -89,6 +89,20 @@ async def prediction(reservoir: str):
 async def historic(reservoir: str):
     try:
         data = get_historic(reservoir=reservoir)
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get(
+    "/api/precip",
+    dependencies=requires_auth,
+    response_model=Timeseries,
+    responses=other_responses,
+)
+async def precip(reservoir: str):
+    try:
+        data = get_precip(reservoir=reservoir)
         return data
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

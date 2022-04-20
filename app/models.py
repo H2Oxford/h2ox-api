@@ -28,14 +28,14 @@ class Geometry(BaseModel):
     )
 
 
-class Level(BaseModel):
+class TimeValue(BaseModel):
     date: datetime.date = Field(..., example=datetime.date(2022, 3, 12))
-    level: float = Field(..., example=138)
+    value: float = Field(..., example=138)
 
 
 class Reservoir(BaseModel):
     name: str = Field(..., example="Harangi")
-    level: Level = Field(..., example=Level(date="2021-01-01", level=138))
+    level: TimeValue = Field(..., example=TimeValue(date="2021-01-01", value=138))
     full_level: float = Field(..., example=190)
     geom: Geometry
 
@@ -43,7 +43,7 @@ class Reservoir(BaseModel):
 class Timeseries(BaseModel):
     reservoir: str
     ref_date: datetime.date = Field(..., example=datetime.date(2022, 3, 12))
-    timeseries: list[Level]
+    timeseries: list[TimeValue]
 
 
 class ReservoirList(BaseModel):
