@@ -9,7 +9,15 @@ from fastapi.encoders import jsonable_encoder
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
-from .models import Level, Precip, Geometry, Reservoir, PrecipTimeseries, ReservoirList, LevelTimeseries
+from .models import (
+    Level,
+    Precip,
+    Geometry,
+    Reservoir,
+    PrecipTimeseries,
+    ReservoirList,
+    LevelTimeseries,
+)
 
 bqclient = bigquery.Client(
     credentials=service_account.Credentials.from_service_account_info(
@@ -107,7 +115,9 @@ def get_historic(*, reservoir: str) -> LevelTimeseries:
     job = bqclient.query(query, job_config=job_config)
     historic = (row.values() for row in job)
     historic = [Level(date=row[0], value=row[1], baseline=row[2]) for row in historic]
-    result = LevelTimeseries(reservoir=reservoir, ref_date=latest_date, timeseries=historic)
+    result = LevelTimeseries(
+        reservoir=reservoir, ref_date=latest_date, timeseries=historic
+    )
     return result
 
 
@@ -156,13 +166,18 @@ def get_precip(*, reservoir: str) -> PrecipTimeseries:
     )
     job = bqclient.query(query, job_config=job_config)
     historic = (row.values() for row in job)
-    historic = [Precip(date=row[0], value=row[1], cumulative=row[2], cumulative_baseline=row[3]) for row in historic]
-    result = PrecipTimeseries(reservoir=reservoir, ref_date=latest_date, timeseries=historic)
+    historic = [
+        Precip(date=row[0], value=row[1], cumulative=row[2], cumulative_baseline=row[3])
+        for row in historic
+    ]
+    result = PrecipTimeseries(
+        reservoir=reservoir, ref_date=latest_date, timeseries=historic
+    )
     return result
 
 
 @cache("reservoirs")
-def get_reservoirs() -> ReservoirList:
+def get_reservoirs(include_geoms: bool = True) -> ReservoirList:
     query = f"""
     SELECT
         DISTINCT(pred.reservoir),
@@ -187,7 +202,9 @@ def get_reservoirs() -> ReservoirList:
                 name=row[0],
                 level=Level(date=latest_date, value=row[1], baseline=0),
                 full_level=row[2],
-                geom=Geometry(**shapely.wkt.loads(row[3]).__geo_interface__),
+                geom=Geometry(**shapely.wkt.loads(row[3]).__geo_interface__)
+                if include_geoms
+                else None,
             )
             for row in data
         ]

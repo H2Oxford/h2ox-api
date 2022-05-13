@@ -58,9 +58,9 @@ async def index():
     response_model=ReservoirList,
     responses=other_responses,
 )
-async def reservoirs():
+async def reservoirs(include_geoms: bool = True):
     try:
-        data = get_reservoirs()
+        data = get_reservoirs(include_geoms)
         return data
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

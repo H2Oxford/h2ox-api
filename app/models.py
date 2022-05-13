@@ -1,5 +1,5 @@
 import datetime
-from typing import Union
+from typing import Union, Optional
 
 from pydantic import BaseModel, Field, conlist
 
@@ -45,7 +45,7 @@ class Reservoir(BaseModel):
     name: str = Field(..., example="Harangi")
     level: Level = Field(..., example=Level(date="2021-01-01", value=138, baseline=120))
     full_level: float = Field(..., example=190)
-    geom: Geometry
+    geom: Optional[Geometry]
 
 
 class LevelTimeseries(BaseModel):
