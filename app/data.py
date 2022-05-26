@@ -32,7 +32,7 @@ CACHE_BUST = os.environ.get("REDIS_CACHE_BUST", False)
 r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PW)
 redis_expiry = 60 * 60 * 24 * 2  # 2 days
 
-latest_date = dt.date(2021, 9, 8)  # TODO this shouldn't be hardcoded
+latest_date = dt.date(2022, 4, 21)  # TODO this shouldn't be hardcoded
 
 
 def cache(prefix: str):
