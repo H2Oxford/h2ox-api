@@ -72,7 +72,10 @@ def get_prediction(*, reservoir: str) -> LevelTimeseries:
     job = bqclient.query(query, job_config=job_config)
     date, forecast = [row.values() for row in job][0]
     forecast = [
-        Level(date=(date + dt.timedelta(days=i)).isoformat(), value=val, baseline=0)
+        # convert from BCM to MCM
+        Level(
+            date=(date + dt.timedelta(days=i)).isoformat(), value=val * 1000, baseline=0
+        )
         for i, val in enumerate(forecast)
     ]
     result = LevelTimeseries(reservoir=reservoir, ref_date=date, timeseries=forecast)
