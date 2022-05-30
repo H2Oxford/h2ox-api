@@ -1,5 +1,5 @@
 import datetime
-from typing import Union, Optional
+from typing import Annotated, Optional, Union
 
 from pydantic import BaseModel, Field, conlist
 
@@ -23,7 +23,7 @@ MultiPolygonCoords = conlist(PolygonCoords, min_items=1)
 
 class Geometry(BaseModel):
     type: str = Field(..., example="Polygon")
-    coordinates: Union[PolygonCoords, MultiPolygonCoords] = Field(
+    coordinates: Annotated[list, Union[PolygonCoords, MultiPolygonCoords]] = Field(
         ..., example=[[[1, 3], [2, 2], [4, 4], [1, 3]]]
     )
 

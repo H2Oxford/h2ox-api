@@ -26,13 +26,11 @@ bqclient = bigquery.Client(
 )
 
 REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
-REDIS_PORT = os.environ.get("REDIS_PORT", 6379)
+REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
 REDIS_PW = os.environ.get("REDIS_PW", None)
 CACHE_BUST = os.environ.get("REDIS_CACHE_BUST", False)
 r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PW)
 redis_expiry = 60 * 60 * 24 * 2  # 2 days
-
-latest_date = dt.date(2022, 4, 21)  # TODO this shouldn't be hardcoded
 
 
 def cache(prefix: str):
@@ -84,8 +82,7 @@ def get_prediction(*, reservoir: str) -> LevelTimeseries:
 
 @cache("historic")
 def get_historic(*, reservoir: str) -> LevelTimeseries:
-    start_date = latest_date - dt.timedelta(days=365)
-    query = f"""
+    query = """
     WITH
     baseline AS (
         SELECT
@@ -106,9 +103,8 @@ def get_historic(*, reservoir: str) -> LevelTimeseries:
     ON baseline.doy=EXTRACT(DAYOFYEAR from DATETIME)
 
     WHERE RESERVOIR_NAME = @reservoir
-    AND DATETIME >= "{start_date}"
-    AND DATETIME <= "{latest_date}"
-    ORDER BY DATETIME
+    ORDER BY DATETIME DESC
+    LIMIT 365
     """
     job_config = bigquery.QueryJobConfig(
         query_parameters=[
@@ -116,18 +112,20 @@ def get_historic(*, reservoir: str) -> LevelTimeseries:
         ]
     )
     job = bqclient.query(query, job_config=job_config)
-    historic = (row.values() for row in job)
-    historic = [Level(date=row[0], value=row[1], baseline=row[2]) for row in historic]
+    historic = [
+        Level(date=row[0], value=row[1], baseline=row[2])
+        for row in (row.values() for row in job)
+    ]
+    ref_date = historic[0].date
     result = LevelTimeseries(
-        reservoir=reservoir, ref_date=latest_date, timeseries=historic
+        reservoir=reservoir, ref_date=ref_date, timeseries=historic
     )
     return result
 
 
 @cache("precip")
 def get_precip(*, reservoir: str) -> PrecipTimeseries:
-    start_date = latest_date - dt.timedelta(days=365)
-    query = f"""
+    query = """
     WITH
     cum AS (
         SELECT
@@ -158,9 +156,8 @@ def get_precip(*, reservoir: str) -> PrecipTimeseries:
     ON cum.cum_date=date
 
     WHERE reservoir = @reservoir
-    AND date >= "{start_date}"
-    AND date <= "{latest_date}"
-    ORDER BY date
+    ORDER BY date DESC
+    LIMIT 365
     """
     job_config = bigquery.QueryJobConfig(
         query_parameters=[
@@ -168,22 +165,39 @@ def get_precip(*, reservoir: str) -> PrecipTimeseries:
         ]
     )
     job = bqclient.query(query, job_config=job_config)
-    historic = (row.values() for row in job)
     historic = [
         Precip(date=row[0], value=row[1], cumulative=row[2], cumulative_baseline=row[3])
-        for row in historic
+        for row in (row.values() for row in job)
     ]
+    ref_date = historic[0].date
     result = PrecipTimeseries(
-        reservoir=reservoir, ref_date=latest_date, timeseries=historic
+        reservoir=reservoir, ref_date=ref_date, timeseries=historic
     )
     return result
 
 
 @cache("reservoirs")
 def get_reservoirs(include_geoms: bool = True) -> ReservoirList:
-    query = f"""
+    query = """
+    WITH
+    historic AS (
+        SELECT
+            RESERVOIR_NAME,
+            DATETIME,
+            WATER_VOLUME,
+            FULL_WATER_LEVEL
+        FROM `oxeo-main.wave2web.reservoir-data` AS r1
+        WHERE DATETIME = (
+            SELECT MAX(DATETIME)
+            FROM `oxeo-main.wave2web.reservoir-data` AS r2
+            WHERE r1.RESERVOIR_NAME = r2.RESERVOIR_NAME
+        )
+        ORDER BY RESERVOIR_NAME, DATETIME
+    )
+
     SELECT
         DISTINCT(pred.reservoir),
+        historic.DATETIME,
         historic.WATER_VOLUME * 1000,
         historic.FULL_WATER_LEVEL,
         tracked.lake_geom
@@ -193,9 +207,8 @@ def get_reservoirs(include_geoms: bool = True) -> ReservoirList:
     INNER JOIN `oxeo-main.wave2web.tracked-reservoirs` AS tracked
     ON pred.reservoir=tracked.name
 
-    INNER JOIN `oxeo-main.wave2web.reservoir-data` AS historic
+    INNER JOIN historic
     ON pred.reservoir=historic.RESERVOIR_NAME
-    WHERE historic.DATETIME = "{latest_date}"
     """
     job = bqclient.query(query)
     data = [row.values() for row in job]
@@ -203,9 +216,9 @@ def get_reservoirs(include_geoms: bool = True) -> ReservoirList:
         reservoirs=[
             Reservoir(
                 name=row[0],
-                level=Level(date=latest_date, value=row[1], baseline=0),
-                full_level=row[2],
-                geom=Geometry(**shapely.wkt.loads(row[3]).__geo_interface__)
+                level=Level(date=row[1], value=row[2], baseline=0),
+                full_level=row[3],
+                geom=Geometry(**shapely.wkt.loads(row[4]).__geo_interface__)
                 if include_geoms
                 else None,
             )
