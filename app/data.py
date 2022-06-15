@@ -40,7 +40,7 @@ def cache(prefix: str):
             if CACHE_BUST:
                 data = func(*args, **kwargs)
             else:
-                suffix = kwargs.get("reservoir", "")
+                suffix = "".join([f"{k}={v}_" for k, v in kwargs.items()])
                 key = f"{prefix}.{suffix}"
                 if data := r.get(key):
                     return json.loads(data)
@@ -177,7 +177,7 @@ def get_precip(*, reservoir: str) -> PrecipTimeseries:
 
 
 @cache("reservoirs")
-def get_reservoirs(include_geoms: bool = True) -> ReservoirList:
+def get_reservoirs(*, include_geoms: bool = True) -> ReservoirList:
     query = """
     WITH
     historic AS (

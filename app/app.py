@@ -60,7 +60,7 @@ async def index():
 )
 async def reservoirs(include_geoms: bool = True):
     try:
-        data = get_reservoirs(include_geoms)
+        data = get_reservoirs(include_geoms=include_geoms)
         return data
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
