@@ -49,7 +49,7 @@ other_responses = {
     response_model=str,
 )
 async def index():
-    return "API is running"
+    return "API is running - v2023-07-02"
 
 
 @app.get(
@@ -59,11 +59,8 @@ async def index():
     responses=other_responses,
 )
 async def reservoirs(include_geoms: bool = True):
-    try:
-        data = get_reservoirs(include_geoms=include_geoms)
-        return data
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    data = get_reservoirs(include_geoms=include_geoms)
+    return data
 
 
 @app.get(
@@ -73,11 +70,8 @@ async def reservoirs(include_geoms: bool = True):
     responses=other_responses,
 )
 async def prediction(reservoir: str):
-    try:
-        data = get_prediction(reservoir=reservoir)
-        return data
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    data = get_prediction(reservoir=reservoir)
+    return data
 
 
 @app.get(
@@ -87,11 +81,8 @@ async def prediction(reservoir: str):
     responses=other_responses,
 )
 async def historic(reservoir: str):
-    try:
-        data = get_historic(reservoir=reservoir)
-        return data
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    data = get_historic(reservoir=reservoir)
+    return data
 
 
 @app.get(
@@ -101,8 +92,5 @@ async def historic(reservoir: str):
     responses=other_responses,
 )
 async def precip(reservoir: str):
-    try:
-        data = get_precip(reservoir=reservoir)
-        return data
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    data = get_precip(reservoir=reservoir)
+    return data
