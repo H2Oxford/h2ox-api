@@ -185,7 +185,6 @@ def get_reservoirs(*, include_geoms: bool = True) -> ReservoirList:
             RESERVOIR_NAME,
             DATETIME,
             WATER_VOLUME,
-            FULL_WATER_LEVEL
         FROM `oxeo-main.wave2web.reservoir-data` AS r1
         WHERE DATETIME = (
             SELECT MAX(DATETIME)
@@ -193,13 +192,20 @@ def get_reservoirs(*, include_geoms: bool = True) -> ReservoirList:
             WHERE r1.RESERVOIR_NAME = r2.RESERVOIR_NAME
         )
         ORDER BY RESERVOIR_NAME, DATETIME
+    ),
+
+    levels as (
+      SELECT DISTINCT(RESERVOIR_NAME)
+          RESERVOIR_NAME, FULL_WATER_LEVEL
+      FROM `oxeo-main.wave2web.reservoir-data`
+      WHERE FULL_WATER_LEVEL is not null
     )
 
     SELECT
         DISTINCT(pred.reservoir),
         historic.DATETIME,
         historic.WATER_VOLUME * 1000,
-        historic.FULL_WATER_LEVEL,
+        levels.FULL_WATER_LEVEL,
         tracked.lake_geom
     FROM
         `oxeo-main.wave2web.prediction` AS pred
@@ -209,6 +215,9 @@ def get_reservoirs(*, include_geoms: bool = True) -> ReservoirList:
 
     INNER JOIN historic
     ON pred.reservoir=historic.RESERVOIR_NAME
+
+    INNER JOIN levels
+    on pred.reservoir=levels.RESERVOIR_NAME
     """
     job = bqclient.query(query)
     data = [row.values() for row in job]
